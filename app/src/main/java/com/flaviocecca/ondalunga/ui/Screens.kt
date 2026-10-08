@@ -100,9 +100,10 @@ fun OndaLungaApp(vm: GameViewModel = viewModel()) {
     val sfx = remember { Sfx(context) { vm.settings.value } }
     DisposableEffect(Unit) { onDispose { sfx.release() } }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    var rulesOpen by rememberSaveable { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
     // a text field left focused underneath would keep its cursor and keyboard on top of the sheet
-    LaunchedEffect(settingsOpen) { if (settingsOpen) focusManager.clearFocus() }
+    LaunchedEffect(settingsOpen, rulesOpen) { if (settingsOpen || rulesOpen) focusManager.clearFocus() }
 
     Box(
         Modifier
@@ -117,10 +118,18 @@ fun OndaLungaApp(vm: GameViewModel = viewModel()) {
             ) { home ->
                 val state = vm.state
                 if (home || state == null) {
-                    HomeScreen(vm.settings, onStart = vm::start, onOpenSettings = { settingsOpen = true })
+                    HomeScreen(vm.settings, onStart = vm::start, onOpenRules = { rulesOpen = true }, onOpenSettings = { settingsOpen = true })
                 } else {
                     GameScreen(state, vm, onOpenSettings = { settingsOpen = true })
                 }
+            }
+            AnimatedVisibility(
+                visible = rulesOpen,
+                enter = slideInVertically(tween(280)) { it } + fadeIn(tween(200)),
+                exit = slideOutVertically(tween(220)) { it } + fadeOut(tween(200)),
+            ) {
+                BackHandler { rulesOpen = false }
+                TutorialScreen(onClose = { rulesOpen = false })
             }
             AnimatedVisibility(
                 visible = settingsOpen,
@@ -139,7 +148,7 @@ fun OndaLungaApp(vm: GameViewModel = viewModel()) {
  * (the actions) sits at the bottom edge on tall screens and the page scrolls on short ones.
  */
 @Composable
-private fun ScreenColumn(content: @Composable ColumnScope.() -> Unit) {
+internal fun ScreenColumn(content: @Composable ColumnScope.() -> Unit) {
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
@@ -159,7 +168,7 @@ private fun ScreenColumn(content: @Composable ColumnScope.() -> Unit) {
 }
 
 @Composable
-private fun Group(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+internal fun Group(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Column(
         modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -169,7 +178,12 @@ private fun Group(modifier: Modifier = Modifier, content: @Composable ColumnScop
 }
 
 @Composable
-private fun HomeScreen(settings: SettingsStore, onStart: (Mode, List<String>) -> Unit, onOpenSettings: () -> Unit) {
+private fun HomeScreen(
+    settings: SettingsStore,
+    onStart: (Mode, List<String>) -> Unit,
+    onOpenRules: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
     val rules = settings.value.rules
     fun setRules(transform: (RuleSet) -> RuleSet) = settings.update { it.copy(rules = transform(it.rules)) }
     var mode by rememberSaveable { mutableStateOf(Mode.TEAMS) }
@@ -177,10 +191,7 @@ private fun HomeScreen(settings: SettingsStore, onStart: (Mode, List<String>) ->
     var teamB by rememberSaveable { mutableStateOf("Squadra Luna") }
     var playerA by rememberSaveable { mutableStateOf("Sole") }
     var playerB by rememberSaveable { mutableStateOf("Luna") }
-    var showRules by rememberSaveable { mutableStateOf(false) }
     var needle by remember { mutableFloatStateOf(64f) }
-
-    if (showRules) RulesDialog(onDismiss = { showRules = false })
 
     ScreenColumn {
         Group {
@@ -252,7 +263,7 @@ private fun HomeScreen(settings: SettingsStore, onStart: (Mode, List<String>) ->
                 onStart(mode, names)
             })
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                GhostButton("Come si gioca", onClick = { showRules = true })
+                GhostButton("Come si gioca", onClick = onOpenRules)
                 GhostButton("Impostazioni", onClick = onOpenSettings)
             }
         }
