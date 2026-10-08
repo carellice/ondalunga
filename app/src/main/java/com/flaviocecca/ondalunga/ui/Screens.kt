@@ -75,11 +75,13 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.flaviocecca.ondalunga.GameViewModel
 import com.flaviocecca.ondalunga.LocalSfx
+import com.flaviocecca.ondalunga.SettingsStore
 import com.flaviocecca.ondalunga.Sfx
 import com.flaviocecca.ondalunga.Sound
 import com.flaviocecca.ondalunga.game.GameState
 import com.flaviocecca.ondalunga.game.Mode
 import com.flaviocecca.ondalunga.game.Phase
+import com.flaviocecca.ondalunga.game.RuleSet
 import com.flaviocecca.ondalunga.game.Side
 import com.flaviocecca.ondalunga.game.Spectrum
 import kotlinx.coroutines.delay
@@ -115,7 +117,7 @@ fun OndaLungaApp(vm: GameViewModel = viewModel()) {
             ) { home ->
                 val state = vm.state
                 if (home || state == null) {
-                    HomeScreen(onStart = vm::start, onOpenSettings = { settingsOpen = true })
+                    HomeScreen(vm.settings, onStart = vm::start, onOpenSettings = { settingsOpen = true })
                 } else {
                     GameScreen(state, vm, onOpenSettings = { settingsOpen = true })
                 }
@@ -167,7 +169,9 @@ private fun Group(modifier: Modifier = Modifier, content: @Composable ColumnScop
 }
 
 @Composable
-private fun HomeScreen(onStart: (Mode, List<String>) -> Unit, onOpenSettings: () -> Unit) {
+private fun HomeScreen(settings: SettingsStore, onStart: (Mode, List<String>) -> Unit, onOpenSettings: () -> Unit) {
+    val rules = settings.value.rules
+    fun setRules(transform: (RuleSet) -> RuleSet) = settings.update { it.copy(rules = transform(it.rules)) }
     var mode by rememberSaveable { mutableStateOf(Mode.TEAMS) }
     var teamA by rememberSaveable { mutableStateOf("Squadra Sole") }
     var teamB by rememberSaveable { mutableStateOf("Squadra Luna") }
@@ -196,10 +200,28 @@ private fun HomeScreen(onStart: (Mode, List<String>) -> Unit, onOpenSettings: ()
                 onSelect = { mode = it },
             )
             if (mode == Mode.TEAMS) {
-                GameTextField(teamA, { teamA = it.take(20) }, "Prima squadra", TeamColors[0])
-                GameTextField(teamB, { teamB = it.take(20) }, "Seconda squadra", TeamColors[1])
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(Modifier.weight(1f)) {
+                        GameTextField(teamA, { teamA = it.take(20) }, "Prima squadra", TeamColors[0])
+                    }
+                    Box(Modifier.weight(1f)) {
+                        GameTextField(teamB, { teamB = it.take(20) }, "Seconda squadra", TeamColors[1])
+                    }
+                }
+                GameLength(
+                    label = "Punti per vincere",
+                    options = listOf(5, 10, 15, 20),
+                    selected = rules.targetScore,
+                    onSelect = { n -> setRules { it.copy(targetScore = n) } },
+                )
             } else {
                 Hint("Tutti insieme, una carta per turno: fate più punti possibile. Ogni centro perfetto regala una carta in più.")
+                GameLength(
+                    label = "Carte da giocare",
+                    options = listOf(5, 7, 9),
+                    selected = rules.coopCards,
+                    onSelect = { n -> setRules { it.copy(coopCards = n) } },
+                )
             }
         }
 
@@ -217,6 +239,15 @@ private fun HomeScreen(onStart: (Mode, List<String>) -> Unit, onOpenSettings: ()
                 GhostButton("Impostazioni", onClick = onOpenSettings)
             }
         }
+    }
+}
+
+/** How long the game about to start lasts; the choice is remembered for next time. */
+@Composable
+private fun GameLength(label: String, options: List<Int>, selected: Int, onSelect: (Int) -> Unit) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Label(label, Modifier.padding(start = 6.dp))
+        Toggle(options = options.map { it to "$it" }, selected = selected, onSelect = onSelect)
     }
 }
 

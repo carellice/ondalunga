@@ -89,12 +89,6 @@ fun SettingsScreen(store: SettingsStore, updater: Updater, inGame: Boolean, onCl
         Label("Regole")
         if (inGame) Hint("Le modifiche alle regole valgono dalla prossima partita.")
         Card {
-            SettingTitle("Punti per vincere", "Nelle partite a squadre.")
-            Toggle(
-                options = listOf(5 to "5", 10 to "10", 15 to "15", 20 to "20"),
-                selected = rules.targetScore,
-                onSelect = { n -> setRules { it.copy(targetScore = n) } },
-            )
             SwitchRow(
                 title = "Scommessa sinistra/destra",
                 description = "Gli avversari provano a indovinare da che parte sta il bersaglio: +1 se ci prendono.",
@@ -112,12 +106,6 @@ fun SettingsScreen(store: SettingsStore, updater: Updater, inGame: Boolean, onCl
                 description = "Il Sensitivo può scartare la carta una volta per turno.",
                 checked = rules.cardSwap,
                 onChange = { on -> setRules { it.copy(cardSwap = on) } },
-            )
-            SettingTitle("Carte in cooperativa", "Quanti turni dura la partita tutti insieme.")
-            Toggle(
-                options = listOf(5 to "5", 7 to "7", 9 to "9"),
-                selected = rules.coopCards,
-                onSelect = { n -> setRules { it.copy(coopCards = n) } },
             )
         }
 
