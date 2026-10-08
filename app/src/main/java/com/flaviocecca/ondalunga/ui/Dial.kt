@@ -120,6 +120,7 @@ private fun positionAt(center: Offset, touch: Offset): Float {
  * the needle follows the finger. With [showNeedle] off only the knob is drawn, so the
  * needle cannot sit on top of the target while the psychic studies it. [sideBet] draws an
  * arrow on the closed screen either side of the needle: the two answers to the opponents' bet.
+ * A scripted demo turns the wheel through [spin] (extra degrees) and keeps the device [silent].
  */
 @Composable
 fun Dial(
@@ -130,6 +131,8 @@ fun Dial(
     mode: DialMode = DialMode.LOCKED,
     showNeedle: Boolean = true,
     sideBet: Boolean = false,
+    spin: Float = 0f,
+    silent: Boolean = false,
     onGuessChange: (Float) -> Unit = {},
     onSpinStart: () -> Unit = {},
     onSpinEnd: () -> Unit = {},
@@ -168,7 +171,7 @@ fun Dial(
 
     val firstCover = remember { booleanArrayOf(true) }
     LaunchedEffect(revealed) {
-        if (firstCover[0]) firstCover[0] = false else sfx?.play(Sound.SLIDE)
+        if (firstCover[0]) firstCover[0] = false else if (!silent) sfx?.play(Sound.SLIDE)
     }
 
     Canvas(
@@ -224,7 +227,7 @@ fun Dial(
         val g = DialGeometry(size.width)
         drawCasing(g)
         clipRect(bottom = g.center.y) {
-            drawWheel(g, wheelAngle, target, measurer)
+            drawWheel(g, wheelAngle + spin, target, measurer)
             drawScreen(g, cover)
             drawBetArrows(g, guess, betArrows * cover)
             // the casing lip casts a shadow on the wheel

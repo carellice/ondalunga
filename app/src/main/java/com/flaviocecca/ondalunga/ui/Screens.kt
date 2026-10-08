@@ -84,11 +84,11 @@ import com.flaviocecca.ondalunga.game.Side
 import com.flaviocecca.ondalunga.game.Spectrum
 import kotlinx.coroutines.delay
 
-private val TeamColors = listOf(Palette.Sun, Palette.Sky)
+internal val TeamColors = listOf(Palette.Sun, Palette.Sky)
 
 // the two ends of the spectrum card; the left/right bet reuses them
-private val SpectrumLeft = Color(0xFF329AA7)
-private val SpectrumRight = Color(0xFFE9763C)
+internal val SpectrumLeft = Color(0xFF329AA7)
+internal val SpectrumRight = Color(0xFFE9763C)
 
 private val TitleBrush = Brush.horizontalGradient(listOf(Palette.Sun, Palette.Ember))
 
@@ -215,32 +215,6 @@ private fun HomeScreen(onStart: (Mode, List<String>) -> Unit, onOpenSettings: ()
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 GhostButton("Come si gioca", onClick = { showRules = true })
                 GhostButton("Impostazioni", onClick = onOpenSettings)
-            }
-        }
-    }
-}
-
-private val RuleSteps = listOf(
-    "Un giocatore fa il Sensitivo: gira la ruota a schermo chiuso, poi lo apre e vede in segreto dove si è fermato il bersaglio tra i due estremi della carta.",
-    "Dà un solo indizio che suggerisca quel punto dello spettro, richiude lo schermo e resta in silenzio.",
-    "La sua squadra discute e trascina la lancetta dove pensa sia il bersaglio.",
-    "A squadre, gli avversari scommettono se il bersaglio è a sinistra o a destra della lancetta: +1 se indovinano, salvo centro perfetto.",
-    "Si scopre il bersaglio: 4 punti al centro, 3 e 2 nelle fasce accanto. Chi fa 4 ed è ancora in svantaggio gioca di nuovo. Chi inizia per secondo parte con 1 punto.",
-)
-
-@Composable
-private fun RulesDialog(onDismiss: () -> Unit) {
-    GameDialog(
-        title = "Come si gioca",
-        onDismiss = onDismiss,
-        actions = { ChunkyButton("Ho capito", onClick = onDismiss) },
-    ) {
-        RuleSteps.forEachIndexed { index, step ->
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Raised(Palette.Sun, Modifier.size(width = 28.dp, height = 31.dp), depth = 3.dp, shape = CircleShape) {
-                    Text("${index + 1}", color = Palette.Night, fontSize = 14.sp, fontWeight = FontWeight.Black)
-                }
-                Text(step, Modifier.weight(1f), fontSize = 15.sp, lineHeight = 21.sp, color = Palette.Cream.copy(alpha = 0.9f))
             }
         }
     }
@@ -473,7 +447,7 @@ private fun PhaseTitle(s: GameState) {
 }
 
 @Composable
-private fun SpectrumCard(spectrum: Spectrum) {
+internal fun SpectrumCard(spectrum: Spectrum) {
     val shape = RoundedCornerShape(22.dp)
     Box(contentAlignment = Alignment.Center) {
         Row(
