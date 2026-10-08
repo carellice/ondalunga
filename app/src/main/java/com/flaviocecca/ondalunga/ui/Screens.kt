@@ -13,6 +13,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -55,8 +56,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -495,14 +498,23 @@ private fun SpectrumCard(spectrum: Spectrum) {
                 modifier = Modifier.padding(start = 14.dp),
             )
         }
-        Box(
+        Canvas(
             Modifier
                 .size(30.dp)
                 .background(Palette.Night, CircleShape)
                 .border(2.dp, Palette.Cream.copy(alpha = 0.7f), CircleShape),
-            contentAlignment = Alignment.Center,
         ) {
-            Text("↔", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            val half = 6.5.dp.toPx()
+            val head = 3.5.dp.toPx()
+            val stroke = 2.dp.toPx()
+            fun line(from: Offset, to: Offset) =
+                drawLine(Palette.Cream, from, to, stroke, StrokeCap.Round)
+            line(center.copy(x = center.x - half), center.copy(x = center.x + half))
+            for (dir in listOf(-1f, 1f)) {
+                val tip = center.copy(x = center.x + dir * half)
+                line(tip, Offset(tip.x - dir * head, tip.y - head))
+                line(tip, Offset(tip.x - dir * head, tip.y + head))
+            }
         }
     }
 }
