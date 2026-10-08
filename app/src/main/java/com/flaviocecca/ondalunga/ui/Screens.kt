@@ -175,6 +175,8 @@ private fun HomeScreen(settings: SettingsStore, onStart: (Mode, List<String>) ->
     var mode by rememberSaveable { mutableStateOf(Mode.TEAMS) }
     var teamA by rememberSaveable { mutableStateOf("Squadra Sole") }
     var teamB by rememberSaveable { mutableStateOf("Squadra Luna") }
+    var playerA by rememberSaveable { mutableStateOf("Sole") }
+    var playerB by rememberSaveable { mutableStateOf("Luna") }
     var showRules by rememberSaveable { mutableStateOf(false) }
     var needle by remember { mutableFloatStateOf(64f) }
 
@@ -195,7 +197,7 @@ private fun HomeScreen(settings: SettingsStore, onStart: (Mode, List<String>) ->
 
         Group(Modifier.padding(bottom = 12.dp)) {
             Toggle(
-                options = listOf(Mode.TEAMS to "A squadre", Mode.COOP to "Cooperativa"),
+                options = listOf(Mode.TEAMS to "A squadre", Mode.DUEL to "1 contro 1", Mode.COOP to "Cooperativa"),
                 selected = mode,
                 onSelect = { mode = it },
             )
@@ -206,6 +208,21 @@ private fun HomeScreen(settings: SettingsStore, onStart: (Mode, List<String>) ->
                     }
                     Box(Modifier.weight(1f)) {
                         GameTextField(teamB, { teamB = it.take(20) }, "Seconda squadra", TeamColors[1])
+                    }
+                }
+                GameLength(
+                    label = "Punti per vincere",
+                    options = listOf(5, 10, 15, 20),
+                    selected = rules.targetScore,
+                    onSelect = { n -> setRules { it.copy(targetScore = n) } },
+                )
+            } else if (mode == Mode.DUEL) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(Modifier.weight(1f)) {
+                        GameTextField(playerA, { playerA = it.take(20) }, "Giocatore 1", TeamColors[0])
+                    }
+                    Box(Modifier.weight(1f)) {
+                        GameTextField(playerB, { playerB = it.take(20) }, "Giocatore 2", TeamColors[1])
                     }
                 }
                 GameLength(
@@ -227,10 +244,10 @@ private fun HomeScreen(settings: SettingsStore, onStart: (Mode, List<String>) ->
 
         Group {
             ChunkyButton("Gioca", onClick = {
-                val names = if (mode == Mode.TEAMS) {
-                    listOf(teamA.trim().ifEmpty { "Squadra 1" }, teamB.trim().ifEmpty { "Squadra 2" })
-                } else {
-                    listOf("Tutti")
+                val names = when (mode) {
+                    Mode.TEAMS -> listOf(teamA.trim().ifEmpty { "Squadra 1" }, teamB.trim().ifEmpty { "Squadra 2" })
+                    Mode.DUEL -> listOf(playerA.trim().ifEmpty { "Giocatore 1" }, playerB.trim().ifEmpty { "Giocatore 2" })
+                    Mode.COOP -> listOf("Tutti")
                 }
                 onStart(mode, names)
             })
@@ -449,13 +466,17 @@ private fun RowScope.TeamScore(name: String, score: Int, targetScore: Int, color
 
 @Composable
 private fun PhaseTitle(s: GameState) {
-    val teams = s.mode == Mode.TEAMS
+    val teams = s.versus
     AnimatedContent(
         targetState = s.phase,
         transitionSpec = { fadeIn(tween(250, delayMillis = 80)) togetherWith fadeOut(tween(100)) },
         label = "title",
     ) { phase ->
-        val team = if (phase == Phase.LEFT_RIGHT) s.opponent else s.activeTeam
+        val team = when (phase) {
+            Phase.LEFT_RIGHT -> s.opponent
+            Phase.PASS, Phase.SPIN, Phase.PSYCHIC -> s.psychicSide
+            else -> s.activeTeam
+        }
         val color = if (teams) TeamColors[team] else Palette.Sun
         val teamName = if (teams) s.teamNames[team] else "Tutti insieme"
         val (chip, title) = when (phase) {
@@ -567,11 +588,21 @@ private fun ClueBubble(clue: String) {
 
 @Composable
 private fun PhaseControls(phase: Phase, s: GameState, vm: GameViewModel) {
-    val accent = if (s.mode == Mode.TEAMS) TeamColors[s.activeTeam] else Palette.Sun
+    val duel = s.mode == Mode.DUEL
+    val guesser = s.teamNames[s.activeTeam]
+    val psychic = s.teamNames[s.psychicSide]
+    val accent = when {
+        !s.versus -> Palette.Sun
+        phase == Phase.PASS || phase == Phase.SPIN || phase == Phase.PSYCHIC -> TeamColors[s.psychicSide]
+        else -> TeamColors[s.activeTeam]
+    }
     when (phase) {
         Phase.PASS -> {
-            Hint("Scegliete chi fa il Sensitivo in questo turno e passategli il telefono. Tutti gli altri: occhi lontani dallo schermo!")
-            ChunkyButton("Sono il Sensitivo", onClick = vm::psychicReady, color = accent)
+            Hint(
+                if (duel) "In questo turno $psychic fa il Sensitivo e dà l'indizio, $guesser indovina e prende i punti. $guesser: occhi lontani dallo schermo!"
+                else "Scegliete chi fa il Sensitivo in questo turno e passategli il telefono. Tutti gli altri: occhi lontani dallo schermo!"
+            )
+            ChunkyButton(if (duel) "Sono $psychic" else "Sono il Sensitivo", onClick = vm::psychicReady, color = accent)
         }
 
         Phase.SPIN -> {
@@ -588,8 +619,11 @@ private fun PhaseControls(phase: Phase, s: GameState, vm: GameViewModel) {
         }
 
         Phase.GUESS -> {
-            Hint("Discutete e trascinate la lancetta. Il Sensitivo non può dire altro!")
-            ChunkyButton("Confermiamo", onClick = vm::confirmGuess, color = accent)
+            Hint(
+                if (duel) "$guesser, trascina la lancetta dove pensi che sia il bersaglio. $psychic non può dire altro!"
+                else "Discutete e trascinate la lancetta. Il Sensitivo non può dire altro!"
+            )
+            ChunkyButton(if (duel) "Confermo" else "Confermiamo", onClick = vm::confirmGuess, color = accent)
         }
 
         Phase.LEFT_RIGHT -> {
@@ -642,7 +676,7 @@ private fun SideBetBrief(s: GameState) {
 @Composable
 private fun RevealResult(s: GameState) {
     val result = s.result ?: return
-    val teams = s.mode == Mode.TEAMS
+    val teams = s.versus
     val badgeColor = when (result.zone) {
         4 -> Palette.Sky
         3 -> Palette.Ember
@@ -692,6 +726,7 @@ private fun RevealResult(s: GameState) {
                 )
                 val detail = when {
                     !teams -> if (result.bonus) "Avete guadagnato una carta in più!" else null
+                    s.mode == Mode.DUEL -> if (result.points > 0) "Punti a ${s.teamNames[s.activeTeam]}." else null
                     !s.rules.sideBet -> null
                     result.zone == 4 -> "${s.teamNames[s.opponent]} non prende punti."
                     result.opponentScored -> "${s.teamNames[s.opponent]} indovina il lato: +1"
@@ -702,7 +737,8 @@ private fun RevealResult(s: GameState) {
                 }
                 if (teams && result.bonus && !s.finished) {
                     Text(
-                        "Ancora in svantaggio: ${s.teamNames[s.activeTeam]} gioca di nuovo!",
+                        if (s.mode == Mode.DUEL) "Ancora in svantaggio: ${s.teamNames[s.activeTeam]} indovina di nuovo!"
+                        else "Ancora in svantaggio: ${s.teamNames[s.activeTeam]} gioca di nuovo!",
                         fontSize = 14.sp,
                         lineHeight = 19.sp,
                         fontWeight = FontWeight.Bold,
@@ -724,7 +760,7 @@ private fun coopVerdict(score: Int): String = when {
 
 @Composable
 private fun GameOverSummary(s: GameState) {
-    val teams = s.mode == Mode.TEAMS
+    val teams = s.versus
     val sfx = LocalSfx.current
     LaunchedEffect(Unit) { sfx?.play(Sound.WIN) }
     Group(Modifier.padding(vertical = 24.dp)) {

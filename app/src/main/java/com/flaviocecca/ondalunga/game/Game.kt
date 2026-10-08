@@ -3,7 +3,11 @@ package com.flaviocecca.ondalunga.game
 import kotlin.math.abs
 import kotlin.random.Random
 
-enum class Mode { TEAMS, COOP }
+/**
+ * [DUEL] is one player against one: the psychic gives the clue to the opponent, who aims
+ * the needle and takes the points. Scoring is otherwise the same race as [TEAMS].
+ */
+enum class Mode { TEAMS, DUEL, COOP }
 
 enum class Phase { PASS, SPIN, PSYCHIC, GUESS, LEFT_RIGHT, REVEAL, GAME_OVER }
 
@@ -53,6 +57,12 @@ data class GameState(
     val finished: Boolean = false,
 ) {
     val opponent: Int get() = 1 - activeTeam
+
+    /** Two sides racing to the target score, as opposed to everyone playing together. */
+    val versus: Boolean get() = mode != Mode.COOP
+
+    /** Whose hands the phone is in while the target is visible. In a duel that is the rival of whoever scores. */
+    val psychicSide: Int get() = if (mode == Mode.DUEL) opponent else activeTeam
     val leader: Int get() = scores.indices.maxBy { scores[it] }
 }
 
@@ -94,13 +104,13 @@ class Engine(
         Rules.TARGET_MIN + random.nextFloat() * (Rules.TARGET_MAX - Rules.TARGET_MIN)
 
     fun newGame(mode: Mode, teamNames: List<String>, rules: RuleSet = RuleSet()): GameState {
-        val first = if (mode == Mode.TEAMS) random.nextInt(2) else 0
+        val first = if (mode != Mode.COOP) random.nextInt(2) else 0
         return GameState(
             mode = mode,
             teamNames = teamNames,
             rules = rules,
             // the team that plays second starts one point ahead
-            scores = if (mode == Mode.TEAMS) List(2) { if (it == first) 0 else 1 } else listOf(0),
+            scores = if (mode != Mode.COOP) List(2) { if (it == first) 0 else 1 } else listOf(0),
             activeTeam = first,
             round = 1,
             cardsLeft = if (mode == Mode.COOP) rules.coopCards else 0,
@@ -123,7 +133,7 @@ class Engine(
     fun resolve(s: GameState): GameState {
         val zone = Rules.zone(s.target, s.guess)
         return when (s.mode) {
-            Mode.TEAMS -> {
+            Mode.TEAMS, Mode.DUEL -> {
                 val opponentScored = zone != 4 && s.sideGuess != null &&
                     s.sideGuess == Rules.sideOfTarget(s.target, s.guess)
                 val scores = s.scores.toMutableList()

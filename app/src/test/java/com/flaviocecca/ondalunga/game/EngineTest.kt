@@ -35,6 +35,18 @@ class EngineTest {
     }
 
     @Test
+    fun duelGivesThePointsToTheGuesserAndSwapsRoles() {
+        val start = engine.newGame(Mode.DUEL, listOf("A", "B"))
+        assertEquals(1, start.scores[start.opponent])
+        assertEquals(start.opponent, start.psychicSide)
+
+        val s = engine.resolve(start.copy(activeTeam = 0, scores = listOf(0, 1), target = 60f, guess = 70f))
+        assertEquals(listOf(3, 1), s.scores)
+        assertFalse(s.result!!.opponentScored)
+        assertEquals(1, engine.nextRound(s).activeTeam)
+    }
+
+    @Test
     fun opponentScoresOnCorrectSide() {
         val s = engine.resolve(teams(listOf(0, 1), target = 60f, guess = 70f, side = Side.LEFT))
         assertEquals(listOf(3, 2), s.scores)

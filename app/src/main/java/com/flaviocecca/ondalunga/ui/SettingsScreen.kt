@@ -91,7 +91,7 @@ fun SettingsScreen(store: SettingsStore, updater: Updater, inGame: Boolean, onCl
         Card {
             SwitchRow(
                 title = "Scommessa sinistra/destra",
-                description = "Gli avversari provano a indovinare da che parte sta il bersaglio: +1 se ci prendono.",
+                description = "A squadre, gli avversari provano a indovinare da che parte sta il bersaglio: +1 se ci prendono.",
                 checked = rules.sideBet,
                 onChange = { on -> setRules { it.copy(sideBet = on) } },
             )
