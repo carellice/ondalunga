@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,12 +28,14 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -69,6 +72,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.flaviocecca.ondalunga.LocalSfx
 import com.flaviocecca.ondalunga.Sound
 import kotlin.math.PI
@@ -111,7 +115,7 @@ fun Modifier.starfield(): Modifier = drawBehind {
 // ---------------------------------------------------------------------------------------
 
 /** Neutral plastic for secondary controls. */
-private val Slate = Color(0xFF2C3F74)
+val Slate = Color(0xFF2C3F74)
 
 /**
  * A block standing proud of the surface: a lit face on top of a darker ledge [depth] tall.
@@ -467,6 +471,62 @@ fun GameSlider(value: Float, onChange: (Float) -> Unit, onDone: () -> Unit, modi
     }
 }
 
+/** A carved groove filling up from the left, for downloads and the like. */
+@Composable
+fun ProgressGroove(progress: Float, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(16.dp)
+            .well(CircleShape)
+    ) {
+        Box(
+            Modifier
+                .fillMaxHeight()
+                .fillMaxWidth(progress.coerceIn(0f, 1f))
+                .background(Brush.verticalGradient(listOf(Palette.Sun, Color(0xFFC98A1E))))
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------------------
+// Dialogs
+// ---------------------------------------------------------------------------------------
+
+/**
+ * Modal panel in the same raised plastic as the buttons: a title, scrolling [content],
+ * and a row of [actions] pinned to the bottom.
+ */
+@Composable
+fun GameDialog(
+    title: String,
+    onDismiss: () -> Unit,
+    actions: @Composable RowScope.() -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Raised(Color(0xFF263A72), depth = 9.dp, shape = RoundedCornerShape(28.dp)) {
+            Column(
+                Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(title, color = Palette.Cream, fontSize = 23.sp, lineHeight = 28.sp, fontWeight = FontWeight.Black)
+                    Wave(Modifier.width(72.dp), color = Palette.Sun)
+                }
+                Column(
+                    Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    content = content,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), content = actions)
+            }
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------------------
 // Text and surfaces
 // ---------------------------------------------------------------------------------------
@@ -534,8 +594,9 @@ fun Hint(text: String) {
 @Composable
 fun Wave(modifier: Modifier = Modifier, color: Color = Palette.Sky, phase: Float = 0f) {
     Canvas(
-        modifier
+        Modifier
             .width(150.dp)
+            .then(modifier)
             .height(14.dp)
     ) {
         val path = Path()

@@ -1,6 +1,10 @@
-# Onda Lunga
+<p align="center">
+  <img src="docs/icon.svg" width="128" height="128" alt="Icona di Onda Lunga">
+</p>
 
-Un party game per Android da giocare in compagnia con un solo telefono: siete sulla stessa lunghezza d'onda?
+<h1 align="center">Onda Lunga</h1>
+
+<p align="center">Un party game per Android da giocare in compagnia con un solo telefono:<br>siete sulla stessa lunghezza d'onda?</p>
 
 A ogni turno un giocatore, il **Sensitivo**, fa girare la ruota a schermo chiuso, poi sbircia dove si è fermato il bersaglio su uno spettro tra due estremi (per esempio *Freddo – Caldo*). Dà un solo indizio, richiude lo schermo, e la sua squadra deve trascinare la lancetta dove pensa che sia il bersaglio.
 
@@ -11,6 +15,7 @@ A ogni turno un giocatore, il **Sensitivo**, fa girare la ruota a schermo chiuso
 - Ruota da far girare con il dito, lancetta da trascinare, schermo che scorre.
 - 80 carte in italiano.
 - Suoni, vibrazione e regole regolabili dalle impostazioni.
+- Aggiornamento dall'app: dalle impostazioni controlla se c'è una nuova release e la scarica.
 
 ## Installazione
 
@@ -29,6 +34,8 @@ I suoni sono sintetizzati da `tools/make_sounds.py`; per rigenerarli:
 ```bash
 python3 tools/make_sounds.py
 ```
+
+L'icona di questa pagina è ricavata dai vettoriali dell'app con `python3 tools/make_icon.py`.
 
 `release.command` (macOS, doppio click) incrementa la versione, compila l'APK firmato e lo pubblica nelle release di GitHub. Richiede la [GitHub CLI](https://cli.github.com) e, alla prima esecuzione, crea una chiave di firma locale che non viene mai caricata nel repository.
 

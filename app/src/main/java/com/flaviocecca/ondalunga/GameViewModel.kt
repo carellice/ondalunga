@@ -5,16 +5,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.flaviocecca.ondalunga.game.Engine
 import com.flaviocecca.ondalunga.game.GameState
 import com.flaviocecca.ondalunga.game.Mode
 import com.flaviocecca.ondalunga.game.Phase
 import com.flaviocecca.ondalunga.game.Side
+import com.flaviocecca.ondalunga.update.Updater
 
 class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val engine = Engine()
 
     val settings = SettingsStore(application)
+    val updater = Updater(application, viewModelScope)
 
     /** `null` while on the home screen. */
     var state by mutableStateOf<GameState?>(null)

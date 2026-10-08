@@ -75,4 +75,6 @@ dependencies {
     implementation(libs.androidx.compose.material3)
 
     testImplementation(libs.junit)
+    // org.json ships with Android but not with the JVM the unit tests run on
+    testImplementation(libs.json)
 }

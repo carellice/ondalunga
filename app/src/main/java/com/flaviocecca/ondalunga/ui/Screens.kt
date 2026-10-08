@@ -37,10 +37,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -125,7 +123,7 @@ fun OndaLungaApp(vm: GameViewModel = viewModel()) {
                 exit = slideOutVertically(tween(220)) { it } + fadeOut(tween(200)),
             ) {
                 BackHandler { settingsOpen = false }
-                SettingsScreen(vm.settings, inGame = vm.state != null, onClose = { settingsOpen = false })
+                SettingsScreen(vm.settings, vm.updater, inGame = vm.state != null, onClose = { settingsOpen = false })
             }
         }
     }
@@ -219,28 +217,30 @@ private fun HomeScreen(onStart: (Mode, List<String>) -> Unit, onOpenSettings: ()
     }
 }
 
+private val RuleSteps = listOf(
+    "Un giocatore fa il Sensitivo: gira la ruota a schermo chiuso, poi lo apre e vede in segreto dove si è fermato il bersaglio tra i due estremi della carta.",
+    "Dà un solo indizio che suggerisca quel punto dello spettro, richiude lo schermo e resta in silenzio.",
+    "La sua squadra discute e trascina la lancetta dove pensa sia il bersaglio.",
+    "A squadre, gli avversari scommettono se il bersaglio è a sinistra o a destra della lancetta: +1 se indovinano, salvo centro perfetto.",
+    "Si scopre il bersaglio: 4 punti al centro, 3 e 2 nelle fasce accanto. Chi fa 4 ed è ancora in svantaggio gioca di nuovo. Chi inizia per secondo parte con 1 punto.",
+)
+
 @Composable
 private fun RulesDialog(onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Ho capito") } },
-        title = { Text("Come si gioca") },
-        text = {
-            Text(
-                "1. A ogni turno un giocatore fa il Sensitivo: fa girare la ruota a schermo chiuso, " +
-                    "poi lo apre e vede in segreto dove si è fermato il bersaglio su uno spettro " +
-                    "tra due estremi (per esempio Freddo – Caldo).\n\n" +
-                    "2. Il Sensitivo dà un solo indizio che suggerisca quel punto dello spettro, " +
-                    "poi richiude lo schermo e resta in silenzio.\n\n" +
-                    "3. La sua squadra discute e trascina la lancetta dove pensa sia il bersaglio.\n\n" +
-                    "4. A squadre: gli avversari scommettono se il bersaglio è a sinistra o a destra " +
-                    "della lancetta (+1 se indovinano, salvo centro perfetto).\n\n" +
-                    "5. Si scopre il bersaglio: 4 punti al centro, 3 e 2 nelle fasce accanto. " +
-                    "Chi fa 4 punti ed è ancora in svantaggio gioca di nuovo. " +
-                    "La squadra che inizia per seconda parte con 1 punto."
-            )
-        },
-    )
+    GameDialog(
+        title = "Come si gioca",
+        onDismiss = onDismiss,
+        actions = { ChunkyButton("Ho capito", onClick = onDismiss) },
+    ) {
+        RuleSteps.forEachIndexed { index, step ->
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Raised(Palette.Sun, Modifier.size(width = 28.dp, height = 31.dp), depth = 3.dp, shape = CircleShape) {
+                    Text("${index + 1}", color = Palette.Night, fontSize = 14.sp, fontWeight = FontWeight.Black)
+                }
+                Text(step, Modifier.weight(1f), fontSize = 15.sp, lineHeight = 21.sp, color = Palette.Cream.copy(alpha = 0.9f))
+            }
+        }
+    }
 }
 
 @Composable
@@ -248,13 +248,16 @@ private fun GameScreen(s: GameState, vm: GameViewModel, onOpenSettings: () -> Un
     var confirmQuit by remember { mutableStateOf(false) }
     BackHandler { confirmQuit = true }
     if (confirmQuit) {
-        AlertDialog(
-            onDismissRequest = { confirmQuit = false },
-            title = { Text("Abbandonare la partita?") },
-            text = { Text("Il punteggio andrà perso.") },
-            confirmButton = { TextButton(onClick = vm::quit) { Text("Abbandona") } },
-            dismissButton = { TextButton(onClick = { confirmQuit = false }) { Text("Continua") } },
-        )
+        GameDialog(
+            title = "Abbandonare la partita?",
+            onDismiss = { confirmQuit = false },
+            actions = {
+                ChunkyButton("Continua", { confirmQuit = false }, Modifier.weight(1f), color = Slate, contentColor = Palette.Cream)
+                ChunkyButton("Abbandona", vm::quit, Modifier.weight(1f), color = Palette.Needle, contentColor = Palette.Cream)
+            },
+        ) {
+            Text("Il punteggio di questa partita andrà perso.", fontSize = 15.sp, lineHeight = 21.sp, color = Palette.Cream.copy(alpha = 0.9f))
+        }
     }
 
     ScreenColumn {

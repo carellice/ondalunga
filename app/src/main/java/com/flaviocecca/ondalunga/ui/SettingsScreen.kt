@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -29,14 +30,19 @@ import com.flaviocecca.ondalunga.Settings
 import com.flaviocecca.ondalunga.SettingsStore
 import com.flaviocecca.ondalunga.Sound
 import com.flaviocecca.ondalunga.game.RuleSet
+import com.flaviocecca.ondalunga.update.UpdateState
+import com.flaviocecca.ondalunga.update.Updater
+import java.util.Locale
 import kotlin.math.roundToInt
 
 /** Full-screen sheet shown over the home screen or a running game. */
 @Composable
-fun SettingsScreen(store: SettingsStore, inGame: Boolean, onClose: () -> Unit) {
+fun SettingsScreen(store: SettingsStore, updater: Updater, inGame: Boolean, onClose: () -> Unit) {
     val settings = store.value
     val rules = settings.rules
     val sfx = LocalSfx.current
+    // look for a new version once per session, the first time the settings are opened
+    LaunchedEffect(Unit) { if (updater.state == UpdateState.Idle) updater.check() }
     fun setRules(transform: (RuleSet) -> RuleSet) = store.update { it.copy(rules = transform(it.rules)) }
 
     Column(
@@ -115,6 +121,9 @@ fun SettingsScreen(store: SettingsStore, inGame: Boolean, onClose: () -> Unit) {
             )
         }
 
+        Label("Aggiornamenti")
+        UpdateCard(updater)
+
         GhostButton(
             "Ripristina le impostazioni iniziali",
             onClick = { store.update { Settings() } },
@@ -123,6 +132,49 @@ fun SettingsScreen(store: SettingsStore, inGame: Boolean, onClose: () -> Unit) {
         ChunkyButton("Fatto", onClick = onClose)
     }
 }
+
+@Composable
+private fun UpdateCard(updater: Updater) {
+    val state = updater.state
+    Card {
+        SettingTitle(
+            "Versione installata: ${updater.installedVersion}",
+            when (state) {
+                UpdateState.Idle -> "Controlla se è uscita una versione più recente."
+                UpdateState.Checking -> "Controllo in corso…"
+                UpdateState.UpToDate -> "Hai già l'ultima versione."
+                is UpdateState.Available -> "È disponibile la versione ${state.release.version}."
+                is UpdateState.Downloading -> "Scarico la versione ${state.release.version}: ${(state.progress * 100).roundToInt()}%"
+                is UpdateState.Ready -> "La versione ${state.release.version} è pronta: conferma l'installazione nella schermata di Android."
+                is UpdateState.Failed ->
+                    if (state.release == null) "Controllo non riuscito. Sei connesso a internet?"
+                    else "Download non riuscito. Controlla la connessione e riprova."
+            },
+        )
+        when (state) {
+            is UpdateState.Available -> ChunkyButton(
+                "Scarica e installa",
+                onClick = { updater.download(state.release) },
+                caption = megabytes(state.release.bytes),
+            )
+            is UpdateState.Downloading -> ProgressGroove(state.progress)
+            is UpdateState.Ready -> ChunkyButton("Installa", onClick = { updater.install(state.file) })
+            is UpdateState.Failed -> {
+                val release = state.release
+                if (release != null) {
+                    ChunkyButton("Riprova il download", onClick = { updater.download(release) })
+                } else {
+                    GhostButton("Riprova", onClick = updater::check)
+                }
+            }
+            UpdateState.Checking -> Unit
+            UpdateState.Idle, UpdateState.UpToDate -> GhostButton("Controlla aggiornamenti", onClick = updater::check)
+        }
+    }
+}
+
+private fun megabytes(bytes: Long): String? =
+    if (bytes > 0) String.format(Locale.ITALY, "%.1f MB", bytes / 1_000_000.0) else null
 
 @Composable
 private fun Card(content: @Composable ColumnScope.() -> Unit) {
