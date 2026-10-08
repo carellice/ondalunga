@@ -118,7 +118,8 @@ private fun positionAt(center: Offset, touch: Offset): Float {
  * The target is hidden behind a sliding screen unless [revealed]. In [DialMode.SPIN] the
  * wheel can be flicked around ([onSpinEnd] fires once it comes to rest); in [DialMode.AIM]
  * the needle follows the finger. With [showNeedle] off only the knob is drawn, so the
- * needle cannot sit on top of the target while the psychic studies it.
+ * needle cannot sit on top of the target while the psychic studies it. [sideBet] draws an
+ * arrow on the closed screen either side of the needle: the two answers to the opponents' bet.
  */
 @Composable
 fun Dial(
@@ -128,11 +129,13 @@ fun Dial(
     modifier: Modifier = Modifier,
     mode: DialMode = DialMode.LOCKED,
     showNeedle: Boolean = true,
+    sideBet: Boolean = false,
     onGuessChange: (Float) -> Unit = {},
     onSpinStart: () -> Unit = {},
     onSpinEnd: () -> Unit = {},
 ) {
     val cover by animateFloatAsState(if (revealed) 0f else 1f, tween(900), label = "cover")
+    val betArrows by animateFloatAsState(if (sideBet) 1f else 0f, tween(350), label = "betArrows")
     val measurer = rememberTextMeasurer()
     val haptics = LocalHapticFeedback.current
     val sfx = LocalSfx.current
@@ -223,6 +226,7 @@ fun Dial(
         clipRect(bottom = g.center.y) {
             drawWheel(g, wheelAngle, target, measurer)
             drawScreen(g, cover)
+            drawBetArrows(g, guess, betArrows * cover)
             // the casing lip casts a shadow on the wheel
             val lip = g.radius * 0.06f
             drawRect(
@@ -418,6 +422,28 @@ private fun DrawScope.drawScreen(g: DialGeometry, cover: Float) {
         ),
         handleRadius, handle,
     )
+}
+
+/** Two arrows curving away from the needle, one towards each end of the spectrum. */
+private fun DrawScope.drawBetArrows(g: DialGeometry, guess: Float, alpha: Float) {
+    if (alpha <= 0f) return
+    val r = g.faceRadius * 0.73f
+    val head = g.faceRadius * 0.055f
+    val stroke = Stroke(g.radius * 0.03f, cap = StrokeCap.Round)
+    val topLeft = Offset(g.center.x - r, g.center.y - r)
+    val arcSize = Size(r * 2, r * 2)
+    val color = Palette.Cream.copy(alpha = 0.92f * alpha)
+    for (dir in listOf(-1f, 1f)) {
+        val from = guess + dir * 7f
+        val tip = (guess + dir * 34f).coerceIn(5f, 175f)
+        // no room for an arrow when the needle is pushed against that edge
+        if ((tip - from) * dir < 10f) continue
+        drawArc(color, 180f + minOf(from, tip), abs(tip - from), false, topLeft, arcSize, style = stroke)
+        val at = g.pointAt(tip, r)
+        for (side in listOf(-1f, 1f)) {
+            drawLine(color, at, g.pointAt(tip - dir * 4.5f, r + side * head), stroke.width, StrokeCap.Round)
+        }
+    }
 }
 
 private fun DrawScope.drawNeedle(g: DialGeometry, guess: Float, showNeedle: Boolean) {

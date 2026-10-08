@@ -290,6 +290,7 @@ private fun GameScreen(s: GameState, vm: GameViewModel, onOpenSettings: () -> Un
                         else -> DialMode.LOCKED
                     },
                     showNeedle = s.phase != Phase.PSYCHIC,
+                    sideBet = s.phase == Phase.LEFT_RIGHT,
                     onGuessChange = vm::setGuess,
                     onSpinStart = vm::spinStarted,
                     onSpinEnd = vm::spinEnded,
@@ -457,7 +458,7 @@ private fun PhaseTitle(s: GameState) {
             Phase.SPIN -> "Sensitivo" to "Gira la ruota!"
             Phase.PSYCHIC -> "Sensitivo" to "Solo per i tuoi occhi"
             Phase.GUESS -> teamName to "Dov'è il bersaglio?"
-            Phase.LEFT_RIGHT -> teamName to "Sinistra o destra?"
+            Phase.LEFT_RIGHT -> teamName to "La vostra scommessa"
             else -> "Risultato" to "Ecco il bersaglio"
         }
         Column(
@@ -587,15 +588,15 @@ private fun PhaseControls(phase: Phase, s: GameState, vm: GameViewModel) {
         }
 
         Phase.LEFT_RIGHT -> {
-            Hint("Rispetto alla lancetta, il centro del bersaglio è più a sinistra o più a destra? Se indovinate, +1.")
+            SideBetBrief(s)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 ChunkyButton(
-                    "Sinistra", { vm.chooseSide(Side.LEFT) }, Modifier.weight(1f),
-                    color = SpectrumLeft, contentColor = Palette.Cream, caption = s.spectrum.left,
+                    "Più a sinistra", { vm.chooseSide(Side.LEFT) }, Modifier.weight(1f),
+                    color = SpectrumLeft, contentColor = Palette.Cream, caption = "verso ${s.spectrum.left}",
                 )
                 ChunkyButton(
-                    "Destra", { vm.chooseSide(Side.RIGHT) }, Modifier.weight(1f),
-                    color = SpectrumRight, caption = s.spectrum.right,
+                    "Più a destra", { vm.chooseSide(Side.RIGHT) }, Modifier.weight(1f),
+                    color = SpectrumRight, caption = "verso ${s.spectrum.right}",
                 )
             }
         }
@@ -606,6 +607,30 @@ private fun PhaseControls(phase: Phase, s: GameState, vm: GameViewModel) {
         }
 
         Phase.GAME_OVER -> Unit
+    }
+}
+
+/** Tells the opponents what their bet is about: who aimed, what to decide, what is at stake. */
+@Composable
+private fun SideBetBrief(s: GameState) {
+    val rivals = s.teamNames[s.activeTeam]
+    Panel(outline = TeamColors[s.opponent].copy(alpha = 0.55f)) {
+        Label("In palio: +1 punto", color = TeamColors[s.opponent])
+        Text(
+            "$rivals ha fermato la lancetta. Da che parte ha sbagliato?",
+            fontSize = 17.sp,
+            lineHeight = 22.sp,
+            fontWeight = FontWeight.ExtraBold,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            "Dite se il bersaglio vero sta più a sinistra o più a destra della lancetta. " +
+                "Se indovinate il lato prendete 1 punto, a meno che $rivals non faccia centro perfetto.",
+            color = Palette.Cream.copy(alpha = 0.82f),
+            fontSize = 14.sp,
+            lineHeight = 19.sp,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
