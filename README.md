@@ -13,7 +13,7 @@ A ogni turno un giocatore, il **Sensitivo**, fa girare la ruota a schermo chiuso
 - **A squadre**: 4, 3 o 2 punti in base alla fascia colpita, scommessa sinistra/destra degli avversari, turno extra in rimonta.
 - **Cooperativa**: tutti insieme, un numero fisso di carte per fare più punti possibile.
 - Ruota da far girare con il dito, lancetta da trascinare, schermo che scorre.
-- 80 carte in italiano.
+- 221 carte in italiano.
 - Suoni, vibrazione e regole regolabili dalle impostazioni.
 - Aggiornamento dall'app: dalle impostazioni controlla se c'è una nuova release e la scarica.
 
