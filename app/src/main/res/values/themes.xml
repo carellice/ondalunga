@@ -1,0 +1,7 @@
+<resources>
+    <color name="night">#FF14213D</color>
+
+    <style name="Theme.OndaLunga" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/night</item>
+    </style>
+</resources>
