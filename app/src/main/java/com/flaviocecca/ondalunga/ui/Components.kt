@@ -10,9 +10,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -40,8 +40,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -190,7 +192,8 @@ private fun PushKey(
 ) {
     val sfx = LocalSfx.current
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    // tracked by hand: after a quick tap the interaction source can leave the key looking held down
+    var pressed by remember { mutableStateOf(false) }
     val sink by animateDpAsState(if (pressed || !enabled) depth - 1.dp else 0.dp, label = "sink")
     Raised(
         color = color,
@@ -198,10 +201,22 @@ private fun PushKey(
         depth = depth,
         sink = sink,
         shape = shape,
-        face = Modifier.clickable(interaction, indication = null, enabled = enabled, role = Role.Button) {
-            sfx?.play(Sound.TAP)
-            onClick()
-        },
+        face = Modifier
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    pressed = true
+                    try {
+                        waitForUpOrCancellation()
+                    } finally {
+                        pressed = false
+                    }
+                }
+            }
+            .clickable(interaction, indication = null, enabled = enabled, role = Role.Button) {
+                sfx?.play(Sound.TAP)
+                onClick()
+            },
         content = content,
     )
 }
