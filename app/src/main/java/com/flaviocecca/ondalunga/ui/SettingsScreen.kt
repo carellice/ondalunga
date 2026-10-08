@@ -3,26 +3,29 @@ package com.flaviocecca.ondalunga.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.flaviocecca.ondalunga.LocalSfx
@@ -45,81 +48,106 @@ fun SettingsScreen(store: SettingsStore, updater: Updater, inGame: Boolean, onCl
     LaunchedEffect(Unit) { if (updater.state == UpdateState.Idle) updater.check() }
     fun setRules(transform: (RuleSet) -> RuleSet) = store.update { it.copy(rules = transform(it.rules)) }
 
-    Column(
+    var tab by rememberSaveable { mutableStateOf(SettingsTab.AUDIO) }
+
+    Box(
         Modifier
             .fillMaxSize()
             .starfield()
             .pointerInput(Unit) {}
-            .safeDrawingPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Impostazioni", fontSize = 30.sp, fontWeight = FontWeight.Black)
-            RoundIconButton("✕", "Chiudi le impostazioni", onClose)
+        ScreenColumn { tight ->
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Impostazioni", fontSize = if (tight) 25.sp else 30.sp, fontWeight = FontWeight.Black)
+                RoundIconButton("✕", "Chiudi le impostazioni", onClose)
+            }
+            // one section at a time, so the page never needs to scroll
+            Toggle(
+                options = listOf(SettingsTab.AUDIO to "Audio", SettingsTab.RULES to "Regole", SettingsTab.APP to "App"),
+                selected = tab,
+                onSelect = { tab = it },
+            )
+            Column(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                when (tab) {
+                    SettingsTab.AUDIO -> Card {
+                        VolumeSlider(
+                            title = "Effetti e musichette",
+                            value = settings.effectsVolume,
+                            onChange = { v -> store.update { it.copy(effectsVolume = v) } },
+                            onDone = { sfx?.play(Sound.GOOD) },
+                        )
+                        VolumeSlider(
+                            title = "Ruota, lancetta e schermo",
+                            value = settings.deviceVolume,
+                            onChange = { v -> store.update { it.copy(deviceVolume = v) } },
+                            onDone = { sfx?.play(Sound.SLIDE) },
+                        )
+                        SwitchRow(
+                            title = "Vibrazione",
+                            description = "Piccoli scatti mentre giri la ruota.",
+                            checked = settings.haptics,
+                            onChange = { on -> store.update { it.copy(haptics = on) } },
+                        )
+                    }
+
+                    SettingsTab.RULES -> {
+                        Card {
+                            SwitchRow(
+                                title = "Scommessa sinistra/destra",
+                                description = "A squadre, gli avversari provano a indovinare da che parte sta il bersaglio: +1 se ci prendono.",
+                                checked = rules.sideBet,
+                                onChange = { on -> setRules { it.copy(sideBet = on) } },
+                            )
+                            SwitchRow(
+                                title = "Turno extra in rimonta",
+                                description = "Chi fa centro perfetto ed è ancora in svantaggio gioca subito di nuovo.",
+                                checked = rules.catchUp,
+                                onChange = { on -> setRules { it.copy(catchUp = on) } },
+                            )
+                            SwitchRow(
+                                title = "Cambio carta",
+                                description = "Il Sensitivo può scartare la carta una volta per turno.",
+                                checked = rules.cardSwap,
+                                onChange = { on -> setRules { it.copy(cardSwap = on) } },
+                            )
+                        }
+                        if (inGame) {
+                            Text(
+                                "Le modifiche alle regole valgono dalla prossima partita.",
+                                Modifier.fillMaxWidth(),
+                                fontSize = 13.sp,
+                                lineHeight = 18.sp,
+                                color = Palette.Cream.copy(alpha = 0.65f),
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+
+                    SettingsTab.APP -> {
+                        UpdateCard(updater)
+                        GhostButton(
+                            "Ripristina le impostazioni iniziali",
+                            onClick = { store.update { Settings() } },
+                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                        )
+                    }
+                }
+            }
+            ChunkyButton("Fatto", onClick = onClose)
         }
-
-        Label("Audio")
-        Card {
-            VolumeSlider(
-                title = "Effetti e musichette",
-                value = settings.effectsVolume,
-                onChange = { v -> store.update { it.copy(effectsVolume = v) } },
-                onDone = { sfx?.play(Sound.GOOD) },
-            )
-            VolumeSlider(
-                title = "Ruota, lancetta e schermo",
-                value = settings.deviceVolume,
-                onChange = { v -> store.update { it.copy(deviceVolume = v) } },
-                onDone = { sfx?.play(Sound.SLIDE) },
-            )
-            SwitchRow(
-                title = "Vibrazione",
-                description = "Piccoli scatti mentre giri la ruota.",
-                checked = settings.haptics,
-                onChange = { on -> store.update { it.copy(haptics = on) } },
-            )
-        }
-
-        Label("Regole")
-        if (inGame) Hint("Le modifiche alle regole valgono dalla prossima partita.")
-        Card {
-            SwitchRow(
-                title = "Scommessa sinistra/destra",
-                description = "A squadre, gli avversari provano a indovinare da che parte sta il bersaglio: +1 se ci prendono.",
-                checked = rules.sideBet,
-                onChange = { on -> setRules { it.copy(sideBet = on) } },
-            )
-            SwitchRow(
-                title = "Turno extra in rimonta",
-                description = "Chi fa centro perfetto ed è ancora in svantaggio gioca subito di nuovo.",
-                checked = rules.catchUp,
-                onChange = { on -> setRules { it.copy(catchUp = on) } },
-            )
-            SwitchRow(
-                title = "Cambio carta",
-                description = "Il Sensitivo può scartare la carta una volta per turno.",
-                checked = rules.cardSwap,
-                onChange = { on -> setRules { it.copy(cardSwap = on) } },
-            )
-        }
-
-        Label("Aggiornamenti")
-        UpdateCard(updater)
-
-        GhostButton(
-            "Ripristina le impostazioni iniziali",
-            onClick = { store.update { Settings() } },
-            modifier = Modifier.align(Alignment.CenterHorizontally),
-        )
-        ChunkyButton("Fatto", onClick = onClose)
     }
 }
+
+private enum class SettingsTab { AUDIO, RULES, APP }
 
 @Composable
 private fun UpdateCard(updater: Updater) {

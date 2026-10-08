@@ -42,10 +42,10 @@ private const val LETTERS = 9
 
 /**
  * The title as chunky block letters: they drop in one after another, then keep rolling
- * like a wave travelling through the word.
+ * like a wave travelling through the word. [scale] shrinks it for short screens.
  */
 @Composable
-fun GameLogo(modifier: Modifier = Modifier) {
+fun GameLogo(modifier: Modifier = Modifier, scale: Float = 1f) {
     val phase by rememberInfiniteTransition(label = "logo").animateFloat(
         initialValue = 0f,
         targetValue = 2f * PI.toFloat(),
@@ -59,9 +59,12 @@ fun GameLogo(modifier: Modifier = Modifier) {
         modifier.clearAndSetSemantics { contentDescription = "Onda Lunga" },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        LogoWord("ONDA", firstIndex = 0, ink = Warm, phase = phase, intro = intro.value)
-        LogoWord("LUNGA", firstIndex = 4, ink = Cool, phase = phase, intro = intro.value, Modifier.offset(y = (-14).dp))
-        Wave(Modifier.offset(y = (-10).dp), phase = -phase)
+        LogoWord("ONDA", firstIndex = 0, ink = Warm, phase = phase, intro = intro.value, scale = scale)
+        LogoWord(
+            "LUNGA", firstIndex = 4, ink = Cool, phase = phase, intro = intro.value, scale = scale,
+            modifier = Modifier.offset(y = (-14).dp * scale),
+        )
+        if (scale > 0.7f) Wave(Modifier.offset(y = (-10).dp), phase = -phase)
     }
 }
 
@@ -72,9 +75,10 @@ private fun LogoWord(
     ink: LogoInk,
     phase: Float,
     intro: Float,
+    scale: Float,
     modifier: Modifier = Modifier,
 ) {
-    val style = TextStyle(fontSize = 62.sp, lineHeight = 66.sp, fontWeight = FontWeight.Black)
+    val style = TextStyle(fontSize = 62.sp * scale, lineHeight = 66.sp * scale, fontWeight = FontWeight.Black)
     Row(modifier) {
         word.forEachIndexed { i, letter ->
             val index = firstIndex + i
@@ -97,14 +101,14 @@ private fun LogoWord(
                 // extruded side of the block, darkest and blurred at the bottom
                 Text(
                     text,
-                    Modifier.offset(y = 7.dp),
+                    Modifier.offset(y = 7.dp * scale),
                     style = style.copy(
                         color = ink.side,
                         shadow = Shadow(Color.Black.copy(alpha = 0.55f), Offset(0f, 10f), blurRadius = 18f),
                     ),
                 )
-                Text(text, Modifier.offset(y = 5.dp), style = style.copy(color = ink.side))
-                Text(text, Modifier.offset(y = 2.5.dp), style = style.copy(color = ink.side))
+                Text(text, Modifier.offset(y = 5.dp * scale), style = style.copy(color = ink.side))
+                Text(text, Modifier.offset(y = 2.5.dp * scale), style = style.copy(color = ink.side))
                 Text(text, style = style.copy(brush = Brush.verticalGradient(ink.face)))
             }
         }

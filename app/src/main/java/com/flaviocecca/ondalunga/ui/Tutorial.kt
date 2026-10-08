@@ -72,6 +72,10 @@ private val DemoSteps = listOf(
         "Si apre lo schermo",
         "4 punti al centro, 3 e 2 nelle fasce accanto. Poi tocca all'altra squadra: vince chi arriva prima al traguardo.",
     ),
+    DemoStep(
+        "Due regole in più",
+        "Chi fa centro ed è ancora in svantaggio gioca subito di nuovo. Chi inizia per secondo parte con 1 punto.",
+    ),
 )
 
 private val DemoCard = Spectrum("Freddo", "Caldo")
@@ -98,11 +102,12 @@ internal fun TutorialScreen(onClose: () -> Unit) {
 
     // every step first puts the device in its starting pose, so it reads the same from either side
     LaunchedEffect(step) {
-        revealed = step == 1 || step == 2
+        revealed = step == 1 || step == 2 || step == 6
         showNeedle = step != 1 && step != 2
         extra = when (step) {
             2, 3 -> DemoExtra.CLUE
             4 -> DemoExtra.BET
+            6 -> DemoExtra.RESULT
             else -> DemoExtra.NONE
         }
         needle.snapTo(if (step >= 4) DEMO_GUESS else 90f)
@@ -146,17 +151,17 @@ internal fun TutorialScreen(onClose: () -> Unit) {
             .starfield()
             .pointerInput(Unit) {}
     ) {
-        ScreenColumn {
-            Group {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("Come si gioca", fontSize = 30.sp, fontWeight = FontWeight.Black)
-                    RoundIconButton("✕", "Chiudi la guida", onClose)
-                }
-                SpectrumCard(DemoCard)
+        ScreenColumn { tight ->
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Come si gioca", fontSize = if (tight) 25.sp else 30.sp, fontWeight = FontWeight.Black)
+                RoundIconButton("✕", "Chiudi la guida", onClose)
+            }
+            SpectrumCard(DemoCard, tight)
+            DialSlot {
                 Dial(
                     target = DEMO_TARGET,
                     guess = needle.value,
@@ -166,96 +171,68 @@ internal fun TutorialScreen(onClose: () -> Unit) {
                     spin = spin.value,
                     silent = true,
                 )
-                AnimatedContent(
-                    targetState = extra,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 66.dp),
-                    transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(150)) },
-                    contentAlignment = Alignment.Center,
-                    contentKey = { if (it == DemoExtra.BET_CHOSEN) DemoExtra.BET else it },
-                    label = "demoExtra",
-                ) { shown ->
-                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        when (shown) {
-                            DemoExtra.NONE -> Unit
-                            DemoExtra.CLUE -> DemoClue()
-                            DemoExtra.BET, DemoExtra.BET_CHOSEN -> DemoBet(chosen = shown == DemoExtra.BET_CHOSEN)
-                            DemoExtra.RESULT -> DemoResult()
-                        }
+            }
+            AnimatedContent(
+                targetState = extra,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(60.dp),
+                transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(150)) },
+                contentAlignment = Alignment.Center,
+                contentKey = { if (it == DemoExtra.BET_CHOSEN) DemoExtra.BET else it },
+                label = "demoExtra",
+            ) { shown ->
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    when (shown) {
+                        DemoExtra.NONE -> Unit
+                        DemoExtra.CLUE -> DemoClue()
+                        DemoExtra.BET, DemoExtra.BET_CHOSEN -> DemoBet(chosen = shown == DemoExtra.BET_CHOSEN)
+                        DemoExtra.RESULT -> DemoResult()
                     }
                 }
             }
-
+            // a fixed height, so the device does not jump as the text changes length
             AnimatedContent(
                 targetState = step,
                 modifier = Modifier
-                    .padding(vertical = 10.dp)
-                    .heightIn(min = 170.dp),
+                    .fillMaxWidth()
+                    .height(if (tight) 142.dp else 166.dp),
                 transitionSpec = { fadeIn(tween(250, delayMillis = 80)) togetherWith fadeOut(tween(120)) },
                 contentAlignment = Alignment.Center,
                 label = "demoStep",
             ) { index ->
                 Column(
-                    Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Chip("Passo ${index + 1} di ${DemoSteps.size}", Palette.Sun)
                     Text(
                         DemoSteps[index].title,
-                        fontSize = 24.sp,
-                        lineHeight = 29.sp,
+                        fontSize = if (tight) 21.sp else 24.sp,
+                        lineHeight = if (tight) 25.sp else 29.sp,
                         fontWeight = FontWeight.Black,
                         textAlign = TextAlign.Center,
                     )
                     Text(
                         DemoSteps[index].text,
-                        fontSize = 15.sp,
-                        lineHeight = 21.sp,
+                        fontSize = if (tight) 14.sp else 15.sp,
+                        lineHeight = if (tight) 19.sp else 21.sp,
                         color = Palette.Cream.copy(alpha = 0.85f),
                         textAlign = TextAlign.Center,
                     )
-                    if (index == last) {
-                        Text(
-                            "In più: chi fa centro ed è ancora in svantaggio gioca di nuovo, e chi inizia per secondo parte con 1 punto.",
-                            fontSize = 13.sp,
-                            lineHeight = 18.sp,
-                            color = Palette.Cream.copy(alpha = 0.6f),
-                            textAlign = TextAlign.Center,
-                        )
-                    }
                 }
             }
-
-            Group {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    DemoSteps.indices.forEach { index ->
-                        val width by animateDpAsState(if (index == step) 22.dp else 7.dp, label = "dot")
-                        Box(
-                            Modifier
-                                .size(width = width, height = 7.dp)
-                                .background(
-                                    if (index == step) Palette.Sun else Palette.Cream.copy(alpha = if (index < step) 0.55f else 0.2f),
-                                    CircleShape,
-                                )
-                        )
-                    }
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    ChunkyButton(
-                        "Indietro", { step-- }, Modifier.weight(1f),
-                        color = Slate, enabled = step > 0, contentColor = Palette.Cream,
-                    )
-                    ChunkyButton(
-                        if (step == last) "Ho capito" else "Avanti",
-                        { if (step == last) onClose() else step++ },
-                        Modifier.weight(1f),
-                    )
-                }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                ChunkyButton(
+                    "Indietro", { step-- }, Modifier.weight(1f),
+                    color = Slate, enabled = step > 0, contentColor = Palette.Cream,
+                )
+                ChunkyButton(
+                    if (step == last) "Ho capito" else "Avanti",
+                    { if (step == last) onClose() else step++ },
+                    Modifier.weight(1f),
+                )
             }
         }
     }
@@ -269,7 +246,7 @@ private fun DemoClue() {
             .fillMaxWidth()
             .background(Color.White.copy(alpha = 0.055f), shape)
             .border(1.dp, Palette.Sun.copy(alpha = 0.55f), shape)
-            .heightIn(min = 60.dp),
+            .height(56.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -283,10 +260,10 @@ private fun DemoBet(chosen: Boolean) {
     val dim by animateFloatAsState(if (chosen) 0.35f else 1f, label = "dim")
     val sink by animateDpAsState(if (chosen) 3.dp else 0.dp, label = "sink")
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Raised(SpectrumLeft, Modifier.weight(1f).height(52.dp).alpha(dim), depth = 4.dp, shape = RoundedCornerShape(16.dp)) {
+        Raised(SpectrumLeft, Modifier.weight(1f).height(50.dp).alpha(dim), depth = 4.dp, shape = RoundedCornerShape(16.dp)) {
             Text("Più a sinistra", color = Palette.Cream, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
         }
-        Raised(SpectrumRight, Modifier.weight(1f).height(52.dp), depth = 4.dp, sink = sink, shape = RoundedCornerShape(16.dp)) {
+        Raised(SpectrumRight, Modifier.weight(1f).height(50.dp), depth = 4.dp, sink = sink, shape = RoundedCornerShape(16.dp)) {
             Text("Più a destra", color = Palette.Night, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
         }
     }

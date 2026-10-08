@@ -25,19 +25,23 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -62,6 +66,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -70,6 +75,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -105,12 +112,20 @@ fun OndaLungaApp(vm: GameViewModel = viewModel()) {
     // a text field left focused underneath would keep its cursor and keyboard on top of the sheet
     LaunchedEffect(settingsOpen, rulesOpen) { if (settingsOpen || rulesOpen) focusManager.clearFocus() }
 
+    // a game draws its own type: very large system fonts would push the pages past the screen
+    val density = LocalDensity.current
+    val gameDensity = Density(density.density, density.fontScale.coerceAtMost(1.1f))
+
     Box(
         Modifier
             .fillMaxSize()
             .starfield()
     ) {
-        CompositionLocalProvider(LocalContentColor provides Palette.Cream, LocalSfx provides sfx) {
+        CompositionLocalProvider(
+            LocalContentColor provides Palette.Cream,
+            LocalSfx provides sfx,
+            LocalDensity provides gameDensity,
+        ) {
             AnimatedContent(
                 targetState = vm.state == null,
                 transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) },
@@ -143,38 +158,57 @@ fun OndaLungaApp(vm: GameViewModel = viewModel()) {
     }
 }
 
+/** Pages are laid out for at least this much height; on anything shorter the whole page is scaled down together. */
+private val MinDesignHeight = 600.dp
+
+/** Under this height the explanations leave the page for a dialog behind the "?" key. */
+private val RoomyHeight = 720.dp
+
 /**
- * Full-height scrolling page. Children are spread from top to bottom, so the last group
- * (the actions) sits at the bottom edge on tall screens and the page scrolls on short ones.
+ * A full page that never scrolls. Children are stacked from the top and must all fit: give the
+ * one that can stretch or shrink (usually the device, see [DialSlot]) a weight so it takes
+ * whatever height the others leave. [content] is told when the page is `tight`, that is short
+ * enough that secondary text belongs in a dialog. The keyboard slides the page up rather
+ * than squeezing it.
  */
 @Composable
-internal fun ScreenColumn(content: @Composable ColumnScope.() -> Unit) {
+internal fun ScreenColumn(content: @Composable ColumnScope.(tight: Boolean) -> Unit) {
+    val density = LocalDensity.current
+    val keyboard = WindowInsets.ime
+    val navigation = WindowInsets.navigationBars
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
-            .safeDrawingPadding()
+            .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout))
+            .offset { IntOffset(0, -(keyboard.getBottom(this) - navigation.getBottom(this)).coerceAtLeast(0)) }
     ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .heightIn(min = maxHeight)
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
-            horizontalAlignment = Alignment.CenterHorizontally,
-            content = content,
-        )
+        val scale = (maxHeight / MinDesignHeight).coerceAtMost(1f)
+        val tight = maxHeight / scale < RoomyHeight
+        CompositionLocalProvider(LocalDensity provides Density(density.density * scale, density.fontScale)) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(if (tight) 10.dp else 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                content(tight)
+            }
+        }
     }
 }
 
+/** Where the device goes on a page: it gets the height the rest leaves over, and fits itself inside. */
 @Composable
-internal fun Group(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Column(
-        modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        content = content,
-    )
+internal fun ColumnScope.DialSlot(content: @Composable () -> Unit) {
+    Box(
+        Modifier
+            .weight(1f)
+            .fillMaxWidth(),
+        contentAlignment = Alignment.Center,
+    ) {
+        content()
+    }
 }
 
 @Composable
@@ -194,55 +228,54 @@ private fun HomeScreen(
     var needle by remember { mutableFloatStateOf(64f) }
 
     ScreenColumn {
-        Group {
-            GameLogo(Modifier.padding(top = 4.dp))
-            Dial(
-                target = 118f,
-                guess = needle,
-                revealed = true,
-                modifier = Modifier.offset(y = (-14).dp),
-                mode = DialMode.AIM,
-                onGuessChange = { needle = it },
-            )
+        // logo and device share what the controls below leave free
+        BoxWithConstraints(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        ) {
+            val logoScale = (maxHeight * 0.36f / 130.dp).coerceIn(0.4f, 1f)
+            Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+                GameLogo(scale = logoScale)
+                DialSlot {
+                    Dial(
+                        target = 118f,
+                        guess = needle,
+                        revealed = true,
+                        mode = DialMode.AIM,
+                        onGuessChange = { needle = it },
+                    )
+                }
+            }
         }
 
-        Group(Modifier.padding(bottom = 12.dp)) {
-            Toggle(
-                options = listOf(Mode.TEAMS to "A squadre", Mode.DUEL to "1 contro 1", Mode.COOP to "Cooperativa"),
-                selected = mode,
-                onSelect = { mode = it },
-            )
-            if (mode == Mode.TEAMS) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Box(Modifier.weight(1f)) {
-                        GameTextField(teamA, { teamA = it.take(20) }, "Prima squadra", TeamColors[0])
-                    }
-                    Box(Modifier.weight(1f)) {
-                        GameTextField(teamB, { teamB = it.take(20) }, "Seconda squadra", TeamColors[1])
-                    }
-                }
+        Toggle(
+            options = listOf(Mode.TEAMS to "A squadre", Mode.DUEL to "1 contro 1", Mode.COOP to "Cooperativa"),
+            selected = mode,
+            onSelect = { mode = it },
+        )
+        when (mode) {
+            Mode.TEAMS -> {
+                NamePair(teamA, { teamA = it }, "Prima squadra", teamB, { teamB = it }, "Seconda squadra")
                 GameLength(
                     label = "Punti per vincere",
                     options = listOf(5, 10, 15, 20),
                     selected = rules.targetScore,
                     onSelect = { n -> setRules { it.copy(targetScore = n) } },
                 )
-            } else if (mode == Mode.DUEL) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Box(Modifier.weight(1f)) {
-                        GameTextField(playerA, { playerA = it.take(20) }, "Giocatore 1", TeamColors[0])
-                    }
-                    Box(Modifier.weight(1f)) {
-                        GameTextField(playerB, { playerB = it.take(20) }, "Giocatore 2", TeamColors[1])
-                    }
-                }
+            }
+
+            Mode.DUEL -> {
+                NamePair(playerA, { playerA = it }, "Giocatore 1", playerB, { playerB = it }, "Giocatore 2")
                 GameLength(
                     label = "Punti per vincere",
                     options = listOf(5, 10, 15, 20),
                     selected = rules.targetScore,
                     onSelect = { n -> setRules { it.copy(targetScore = n) } },
                 )
-            } else {
+            }
+
+            Mode.COOP -> {
                 Hint("Tutti insieme, una carta per turno: fate più punti possibile. Ogni centro perfetto regala una carta in più.")
                 GameLength(
                     label = "Carte da giocare",
@@ -253,19 +286,37 @@ private fun HomeScreen(
             }
         }
 
-        Group {
-            ChunkyButton("Gioca", onClick = {
-                val names = when (mode) {
-                    Mode.TEAMS -> listOf(teamA.trim().ifEmpty { "Squadra 1" }, teamB.trim().ifEmpty { "Squadra 2" })
-                    Mode.DUEL -> listOf(playerA.trim().ifEmpty { "Giocatore 1" }, playerB.trim().ifEmpty { "Giocatore 2" })
-                    Mode.COOP -> listOf("Tutti")
-                }
-                onStart(mode, names)
-            })
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                GhostButton("Come si gioca", onClick = onOpenRules)
-                GhostButton("Impostazioni", onClick = onOpenSettings)
+        ChunkyButton("Gioca", onClick = {
+            val names = when (mode) {
+                Mode.TEAMS -> listOf(teamA.trim().ifEmpty { "Squadra 1" }, teamB.trim().ifEmpty { "Squadra 2" })
+                Mode.DUEL -> listOf(playerA.trim().ifEmpty { "Giocatore 1" }, playerB.trim().ifEmpty { "Giocatore 2" })
+                Mode.COOP -> listOf("Tutti")
             }
+            onStart(mode, names)
+        })
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            GhostButton("Come si gioca", onClick = onOpenRules)
+            GhostButton("Impostazioni", onClick = onOpenSettings)
+        }
+    }
+}
+
+/** The two sides' names, next to each other. */
+@Composable
+private fun NamePair(
+    first: String,
+    onFirst: (String) -> Unit,
+    firstLabel: String,
+    second: String,
+    onSecond: (String) -> Unit,
+    secondLabel: String,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(Modifier.weight(1f)) {
+            GameTextField(first, { onFirst(it.take(20)) }, firstLabel, TeamColors[0])
+        }
+        Box(Modifier.weight(1f)) {
+            GameTextField(second, { onSecond(it.take(20)) }, secondLabel, TeamColors[1])
         }
     }
 }
@@ -296,23 +347,45 @@ private fun GameScreen(s: GameState, vm: GameViewModel, onOpenSettings: () -> Un
         }
     }
 
-    ScreenColumn {
+    var showHelp by remember { mutableStateOf(false) }
+    val help = phaseHelp(s)
+    if (showHelp && help != null) {
+        GameDialog(
+            title = phaseTitle(s.phase),
+            onDismiss = { showHelp = false },
+            actions = { ChunkyButton("Ho capito", onClick = { showHelp = false }) },
+        ) {
+            Text(help, fontSize = 15.sp, lineHeight = 21.sp, color = Palette.Cream.copy(alpha = 0.9f))
+        }
+    }
+
+    ScreenColumn { tight ->
         if (s.phase == Phase.GAME_OVER) {
-            Group {
-                TopBar(s, onSettings = onOpenSettings, onQuit = vm::quit)
-                Scoreboard(s)
+            TopBar(s, showRound = true, onHelp = null, onSettings = onOpenSettings, onQuit = vm::quit)
+            Scoreboard(s)
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                GameOverSummary(s)
             }
-            GameOverSummary(s)
-            Group {
-                ChunkyButton("Rivincita", onClick = { vm.start(s.mode, s.teamNames) })
-                GhostButton("Torna al menu", onClick = vm::quit)
-            }
+            ChunkyButton("Rivincita", onClick = { vm.start(s.mode, s.teamNames) })
+            GhostButton("Torna al menu", onClick = vm::quit)
         } else {
-            Group {
-                TopBar(s, onSettings = onOpenSettings, onQuit = { confirmQuit = true })
-                Scoreboard(s)
-                PhaseTitle(s)
-                SpectrumCard(s.spectrum)
+            // on a tight page the round counter gives its place to the "?" that opens the explanation
+            TopBar(
+                s,
+                showRound = !tight,
+                onHelp = if (tight && help != null) ({ showHelp = true }) else null,
+                onSettings = onOpenSettings,
+                onQuit = { confirmQuit = true },
+            )
+            Scoreboard(s)
+            PhaseTitle(s, tight)
+            SpectrumCard(s.spectrum, tight)
+            DialSlot {
                 Dial(
                     target = s.target,
                     guess = s.guess,
@@ -329,41 +402,96 @@ private fun GameScreen(s: GameState, vm: GameViewModel, onOpenSettings: () -> Un
                     onSpinEnd = vm::spinEnded,
                 )
             }
-            Group(Modifier.padding(top = 10.dp)) {
-                if (s.clue.isNotBlank() && s.phase in listOf(Phase.GUESS, Phase.LEFT_RIGHT, Phase.REVEAL)) {
-                    ClueBubble(s.clue.trim())
-                }
-                AnimatedContent(
-                    targetState = s.phase,
-                    transitionSpec = {
-                        (fadeIn(tween(260, delayMillis = 90)) + slideInVertically(tween(260, delayMillis = 90)) { it / 5 }) togetherWith
-                            fadeOut(tween(120))
-                    },
-                    label = "controls",
-                ) { phase ->
-                    Group { PhaseControls(phase, s, vm) }
+            // by the reveal everyone has heard the clue: a tight page spends that line on the result
+            val clueShown = s.phase == Phase.GUESS || s.phase == Phase.LEFT_RIGHT || (s.phase == Phase.REVEAL && !tight)
+            if (s.clue.isNotBlank() && clueShown) ClueBubble(s.clue.trim())
+            AnimatedContent(
+                targetState = s.phase,
+                transitionSpec = {
+                    (fadeIn(tween(260, delayMillis = 90)) + slideInVertically(tween(260, delayMillis = 90)) { it / 5 }) togetherWith
+                        fadeOut(tween(120))
+                },
+                label = "controls",
+            ) { phase ->
+                Column(
+                    Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(if (tight) 10.dp else 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    PhaseControls(phase, s, vm, tight)
                 }
             }
         }
     }
 }
 
+private fun phaseTitle(phase: Phase): String = when (phase) {
+    Phase.PASS -> "Telefono al Sensitivo"
+    Phase.SPIN -> "Gira la ruota!"
+    Phase.PSYCHIC -> "Solo per i tuoi occhi"
+    Phase.GUESS -> "Dov'è il bersaglio?"
+    Phase.LEFT_RIGHT -> "La vostra scommessa"
+    else -> "Ecco il bersaglio"
+}
+
+/** What to do right now, in a sentence or two: shown on the page when there is room, behind the "?" key when not. */
+private fun phaseHelp(s: GameState): String? {
+    val duel = s.mode == Mode.DUEL
+    val guesser = s.teamNames[s.activeTeam]
+    val psychic = s.teamNames[s.psychicSide]
+    return when (s.phase) {
+        Phase.PASS ->
+            if (duel) "In questo turno $psychic fa il Sensitivo e dà l'indizio, $guesser indovina e prende i punti. $guesser: occhi lontani dallo schermo!"
+            else "Scegliete chi fa il Sensitivo in questo turno e passategli il telefono. Tutti gli altri: occhi lontani dallo schermo!"
+
+        Phase.SPIN -> "Dai una bella spinta alla ruota con il dito. Lo schermo è chiuso: nessuno sa dove si fermerà il bersaglio."
+
+        Phase.PSYCHIC ->
+            "Guarda dove è finito il bersaglio tra i due estremi della carta e pensa a un solo indizio che stia proprio in quel punto. " +
+                "Dillo a voce o scrivilo, poi chiudi lo schermo e non aggiungere altro."
+
+        Phase.GUESS ->
+            if (duel) "$guesser, trascina la lancetta dove pensi che sia il bersaglio. $psychic non può dire altro!"
+            else "Discutete e trascinate la lancetta. Il Sensitivo non può dire altro!"
+
+        Phase.LEFT_RIGHT ->
+            "$guesser ha fermato la lancetta. Dite se il bersaglio vero sta più a sinistra o più a destra: " +
+                "se indovinate il lato prendete 1 punto, a meno che $guesser non faccia centro perfetto."
+
+        Phase.REVEAL -> "4 punti al centro del bersaglio, 3 e 2 nelle fasce accanto, niente fuori."
+
+        Phase.GAME_OVER -> null
+    }
+}
+
+/** Who the current step belongs to, then the round counter or the "?" key, settings and quit. */
 @Composable
-private fun TopBar(s: GameState, onSettings: () -> Unit, onQuit: () -> Unit) {
+private fun TopBar(s: GameState, showRound: Boolean, onHelp: (() -> Unit)?, onSettings: () -> Unit, onQuit: () -> Unit) {
+    val side = when (s.phase) {
+        Phase.LEFT_RIGHT -> s.opponent
+        Phase.PASS, Phase.SPIN, Phase.PSYCHIC -> s.psychicSide
+        Phase.GAME_OVER -> s.leader
+        else -> s.activeTeam
+    }
+    val name = if (s.versus) s.teamNames[side] else "Tutti insieme"
+    val chip = when (s.phase) {
+        Phase.SPIN, Phase.PSYCHIC -> "Sensitivo"
+        Phase.REVEAL -> "Risultato"
+        Phase.GAME_OVER -> "Partita finita"
+        else -> name
+    }
     Row(
         Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            "ONDA LUNGA",
-            style = TextStyle(brush = TitleBrush, fontSize = 15.sp, fontWeight = FontWeight.Black, letterSpacing = 3.sp),
-        )
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Chip("Turno ${s.round}", Palette.Cream)
-            RoundIconButton("⚙", "Impostazioni", onSettings)
-            RoundIconButton("✕", "Abbandona la partita", onQuit)
+        Box(Modifier.weight(1f)) {
+            Chip(chip, if (s.versus) TeamColors[side] else Palette.Sun)
         }
+        if (showRound) Chip("Turno ${s.round}", Palette.Cream)
+        if (onHelp != null) RoundIconButton("?", "Cosa devo fare", onHelp)
+        RoundIconButton("⚙", "Impostazioni", onSettings)
+        RoundIconButton("✕", "Abbandona la partita", onQuit)
     }
 }
 
@@ -476,41 +604,26 @@ private fun RowScope.TeamScore(name: String, score: Int, targetScore: Int, color
 }
 
 @Composable
-private fun PhaseTitle(s: GameState) {
-    val teams = s.versus
+private fun PhaseTitle(s: GameState, tight: Boolean) {
     AnimatedContent(
         targetState = s.phase,
         transitionSpec = { fadeIn(tween(250, delayMillis = 80)) togetherWith fadeOut(tween(100)) },
         label = "title",
     ) { phase ->
-        val team = when (phase) {
-            Phase.LEFT_RIGHT -> s.opponent
-            Phase.PASS, Phase.SPIN, Phase.PSYCHIC -> s.psychicSide
-            else -> s.activeTeam
-        }
-        val color = if (teams) TeamColors[team] else Palette.Sun
-        val teamName = if (teams) s.teamNames[team] else "Tutti insieme"
-        val (chip, title) = when (phase) {
-            Phase.PASS -> teamName to "Telefono al Sensitivo"
-            Phase.SPIN -> "Sensitivo" to "Gira la ruota!"
-            Phase.PSYCHIC -> "Sensitivo" to "Solo per i tuoi occhi"
-            Phase.GUESS -> teamName to "Dov'è il bersaglio?"
-            Phase.LEFT_RIGHT -> teamName to "La vostra scommessa"
-            else -> "Risultato" to "Ecco il bersaglio"
-        }
-        Column(
+        Text(
+            phaseTitle(phase),
             Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Chip(chip, color)
-            Text(title, fontSize = 27.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center)
-        }
+            fontSize = if (tight) 23.sp else 27.sp,
+            fontWeight = FontWeight.Black,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
 @Composable
-internal fun SpectrumCard(spectrum: Spectrum) {
+internal fun SpectrumCard(spectrum: Spectrum, tight: Boolean = false) {
     val shape = RoundedCornerShape(22.dp)
     Box(contentAlignment = Alignment.Center) {
         Row(
@@ -526,6 +639,7 @@ internal fun SpectrumCard(spectrum: Spectrum) {
                 colors = listOf(Color(0xFF49AEBB), SpectrumLeft, Color(0xFF226F7B)),
                 textColor = Palette.Cream,
                 alignment = Alignment.Start,
+                tight = tight,
                 modifier = Modifier.padding(end = 14.dp),
             )
             SpectrumHalf(
@@ -533,6 +647,7 @@ internal fun SpectrumCard(spectrum: Spectrum) {
                 colors = listOf(Color(0xFFF7935B), SpectrumRight, Color(0xFFCB5A24)),
                 textColor = Palette.Night,
                 alignment = Alignment.End,
+                tight = tight,
                 modifier = Modifier.padding(start = 14.dp),
             )
         }
@@ -563,6 +678,7 @@ private fun RowScope.SpectrumHalf(
     colors: List<Color>,
     textColor: Color,
     alignment: Alignment.Horizontal,
+    tight: Boolean,
     modifier: Modifier,
 ) {
     Column(
@@ -570,8 +686,8 @@ private fun RowScope.SpectrumHalf(
             .weight(1f)
             .fillMaxHeight()
             .background(Brush.verticalGradient(colors))
-            .heightIn(min = 76.dp)
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .heightIn(min = if (tight) 58.dp else 76.dp)
+            .padding(horizontal = 16.dp, vertical = if (tight) 8.dp else 12.dp)
             .then(modifier),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = alignment,
@@ -579,8 +695,8 @@ private fun RowScope.SpectrumHalf(
         Text(
             text,
             color = textColor,
-            fontSize = 18.sp,
-            lineHeight = 22.sp,
+            fontSize = if (tight) 16.sp else 18.sp,
+            lineHeight = if (tight) 19.sp else 22.sp,
             fontWeight = FontWeight.ExtraBold,
             textAlign = if (alignment == Alignment.End) TextAlign.End else TextAlign.Start,
             maxLines = 3,
@@ -589,70 +705,95 @@ private fun RowScope.SpectrumHalf(
     }
 }
 
+/** The clue, on one line so it leaves the height to the device. */
 @Composable
 private fun ClueBubble(clue: String) {
-    Panel(outline = Palette.Sun.copy(alpha = 0.55f)) {
+    val shape = RoundedCornerShape(16.dp)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(Color.White.copy(alpha = 0.055f), shape)
+            .border(1.dp, Palette.Sun.copy(alpha = 0.55f), shape)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Label("Indizio", color = Palette.Sun)
-        Text("«$clue»", fontSize = 24.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center)
+        Text(
+            "«$clue»",
+            Modifier.weight(1f),
+            fontSize = 18.sp,
+            lineHeight = 22.sp,
+            fontWeight = FontWeight.Black,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
 @Composable
-private fun PhaseControls(phase: Phase, s: GameState, vm: GameViewModel) {
+private fun PhaseControls(phase: Phase, s: GameState, vm: GameViewModel, tight: Boolean) {
     val duel = s.mode == Mode.DUEL
-    val guesser = s.teamNames[s.activeTeam]
     val psychic = s.teamNames[s.psychicSide]
     val accent = when {
         !s.versus -> Palette.Sun
         phase == Phase.PASS || phase == Phase.SPIN || phase == Phase.PSYCHIC -> TeamColors[s.psychicSide]
         else -> TeamColors[s.activeTeam]
     }
+    // the explanation of the step [s] is in: on a tight page it waits behind the "?" key instead
+    val help = if (tight || phase != s.phase) null else phaseHelp(s)
     when (phase) {
         Phase.PASS -> {
-            Hint(
-                if (duel) "In questo turno $psychic fa il Sensitivo e dà l'indizio, $guesser indovina e prende i punti. $guesser: occhi lontani dallo schermo!"
-                else "Scegliete chi fa il Sensitivo in questo turno e passategli il telefono. Tutti gli altri: occhi lontani dallo schermo!"
-            )
+            if (help != null) Hint(help)
             ChunkyButton(if (duel) "Sono $psychic" else "Sono il Sensitivo", onClick = vm::psychicReady, color = accent)
         }
 
         Phase.SPIN -> {
-            Hint("Dai una bella spinta alla ruota con il dito. Lo schermo è chiuso: nessuno sa dove si fermerà il bersaglio.")
+            if (help != null) Hint(help)
             ChunkyButton("Apri lo schermo", onClick = vm::openScreen, color = accent, enabled = s.spun)
         }
 
         Phase.PSYCHIC -> {
-            GameTextField(s.clue, { vm.setClue(it.take(60)) }, "Indizio", accent, placeholder = "Dillo a voce, o scrivilo qui")
-            ChunkyButton("Chiudi lo schermo", onClick = vm::hideTarget, color = accent)
+            GameTextField(
+                s.clue, { vm.setClue(it.take(60)) }, "Indizio", accent,
+                placeholder = if (tight) "Indizio: dillo a voce o scrivilo" else "Dillo a voce, o scrivilo qui",
+                showLabel = !tight,
+            )
             if (s.spareSpectrum != null) {
-                GhostButton("Cambia carta (una volta sola)", onClick = vm::swapCard)
+                // one row for both keys; the card can be traded only once
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ChunkyButton(
+                        "Cambia carta", vm::swapCard, Modifier.weight(1f),
+                        color = Slate, contentColor = Palette.Cream, fontSize = 15.sp,
+                    )
+                    ChunkyButton("Chiudi lo schermo", vm::hideTarget, Modifier.weight(1.25f), color = accent, fontSize = 15.sp)
+                }
+            } else {
+                ChunkyButton("Chiudi lo schermo", onClick = vm::hideTarget, color = accent)
             }
         }
 
         Phase.GUESS -> {
-            Hint(
-                if (duel) "$guesser, trascina la lancetta dove pensi che sia il bersaglio. $psychic non può dire altro!"
-                else "Discutete e trascinate la lancetta. Il Sensitivo non può dire altro!"
-            )
+            if (help != null) Hint(help)
             ChunkyButton(if (duel) "Confermo" else "Confermiamo", onClick = vm::confirmGuess, color = accent)
         }
 
         Phase.LEFT_RIGHT -> {
-            SideBetBrief(s)
+            if (!tight) SideBetBrief(s)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 ChunkyButton(
                     "Più a sinistra", { vm.chooseSide(Side.LEFT) }, Modifier.weight(1f),
-                    color = SpectrumLeft, contentColor = Palette.Cream, caption = "verso ${s.spectrum.left}",
+                    color = SpectrumLeft, contentColor = Palette.Cream, caption = "verso ${s.spectrum.left}", fontSize = 17.sp,
                 )
                 ChunkyButton(
                     "Più a destra", { vm.chooseSide(Side.RIGHT) }, Modifier.weight(1f),
-                    color = SpectrumRight, caption = "verso ${s.spectrum.right}",
+                    color = SpectrumRight, caption = "verso ${s.spectrum.right}", fontSize = 17.sp,
                 )
             }
         }
 
         Phase.REVEAL -> {
-            RevealResult(s)
+            RevealResult(s, tight)
             ChunkyButton(if (s.finished) "Vedi il risultato" else "Prossimo turno", onClick = vm::next)
         }
 
@@ -674,18 +815,17 @@ private fun SideBetBrief(s: GameState) {
             textAlign = TextAlign.Center,
         )
         Text(
-            "Dite se il bersaglio vero sta più a sinistra o più a destra della lancetta. " +
-                "Se indovinate il lato prendete 1 punto, a meno che $rivals non faccia centro perfetto.",
+            "Se indovinate il lato prendete 1 punto, salvo centro perfetto.",
             color = Palette.Cream.copy(alpha = 0.82f),
-            fontSize = 14.sp,
-            lineHeight = 19.sp,
+            fontSize = 13.sp,
+            lineHeight = 18.sp,
             textAlign = TextAlign.Center,
         )
     }
 }
 
 @Composable
-private fun RevealResult(s: GameState) {
+private fun RevealResult(s: GameState, tight: Boolean) {
     val result = s.result ?: return
     val teams = s.versus
     val badgeColor = when (result.zone) {
@@ -718,12 +858,12 @@ private fun RevealResult(s: GameState) {
                         scaleY = pop.value
                         alpha = pop.value.coerceIn(0f, 1f)
                     }
-                    .size(68.dp)
+                    .size(if (tight) 54.dp else 68.dp)
                     .background(badgeColor, CircleShape)
                     .border(3.dp, Color.White.copy(alpha = 0.4f), CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("+${result.points}", color = Palette.Night, fontSize = 27.sp, fontWeight = FontWeight.Black)
+                Text("+${result.points}", color = Palette.Night, fontSize = if (tight) 22.sp else 27.sp, fontWeight = FontWeight.Black)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(
@@ -774,8 +914,11 @@ private fun GameOverSummary(s: GameState) {
     val teams = s.versus
     val sfx = LocalSfx.current
     LaunchedEffect(Unit) { sfx?.play(Sound.WIN) }
-    Group(Modifier.padding(vertical = 24.dp)) {
-        Chip("Partita finita", if (teams) TeamColors[s.leader] else Palette.Sun)
+    Column(
+        Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         Text(
             if (teams) "Vince\n${s.teamNames[s.leader]}!" else "${s.scores[0]} punti",
             style = TextStyle(

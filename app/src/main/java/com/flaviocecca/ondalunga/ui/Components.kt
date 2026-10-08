@@ -72,6 +72,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -225,7 +226,7 @@ private fun PushKey(
 // Buttons
 // ---------------------------------------------------------------------------------------
 
-/** The main action button. [caption] adds a small second line. */
+/** The main action button. [caption] adds a small second line; [fontSize] is for two keys sharing a row. */
 @Composable
 fun ChunkyButton(
     text: String,
@@ -235,6 +236,7 @@ fun ChunkyButton(
     enabled: Boolean = true,
     contentColor: Color = Palette.Night,
     caption: String? = null,
+    fontSize: TextUnit = 18.sp,
 ) {
     val depth = 6.dp
     PushKey(
@@ -254,9 +256,11 @@ fun ChunkyButton(
             Text(
                 text,
                 color = textColor,
-                fontSize = 18.sp,
+                fontSize = fontSize,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = 0.4.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             if (caption != null) {
                 Text(
@@ -359,7 +363,7 @@ fun <T> Toggle(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Uni
     }
 }
 
-/** Text typed into a carved slot, with its caption above; the rim lights up in [accent] when focused. */
+/** Text typed into a carved slot, with its caption above unless [showLabel] is off; the rim lights up in [accent] when focused. */
 @Composable
 fun GameTextField(
     value: String,
@@ -367,6 +371,7 @@ fun GameTextField(
     label: String,
     accent: Color = Palette.Sun,
     placeholder: String? = null,
+    showLabel: Boolean = true,
 ) {
     val focusManager = LocalFocusManager.current
     val interaction = remember { MutableInteractionSource() }
@@ -375,7 +380,7 @@ fun GameTextField(
     val style = TextStyle(color = Palette.Cream, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
 
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Label(label, Modifier.padding(start = 6.dp), color = accent.copy(alpha = if (focused) 1f else 0.8f))
+        if (showLabel) Label(label, Modifier.padding(start = 6.dp), color = accent.copy(alpha = if (focused) 1f else 0.8f))
         BasicTextField(
             value = value,
             onValueChange = onValueChange,

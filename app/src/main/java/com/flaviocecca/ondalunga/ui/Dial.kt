@@ -10,7 +10,6 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -175,18 +174,20 @@ fun Dial(
     }
 
     Canvas(
+        // as large as the space it is given allows, in either direction
         modifier
             .widthIn(max = 520.dp)
-            .fillMaxWidth()
             .aspectRatio(ASPECT_RATIO)
             .pointerInput(mode) {
-                val center = DialGeometry(size.width.toFloat()).center
+                // read at each touch: the device changes size as the page around it does
+                fun center() = DialGeometry(size.width.toFloat()).center
                 when (mode) {
                     DialMode.LOCKED -> Unit
 
                     DialMode.AIM -> awaitEachGesture {
                         val down = awaitFirstDown()
                         down.consume()
+                        val center = center()
                         aim(positionAt(center, down.position))
                         drag(down.id) { change ->
                             change.consume()
@@ -197,6 +198,7 @@ fun Dial(
                     DialMode.SPIN -> awaitEachGesture {
                         val down = awaitFirstDown()
                         down.consume()
+                        val center = center()
                         spinJob?.cancel()
                         currentOnSpinStart()
                         var lastAngle = angleAround(center, down.position)
